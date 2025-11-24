@@ -44,14 +44,20 @@ async function upload() {
   document.getElementById("uploadResult").innerText =
     JSON.stringify(await r.json(), null, 2);
 }
-
 async function search() {
   const params = new URLSearchParams();
   params.append("name", document.getElementById("qname").value);
   params.append("resumetype", document.getElementById("qrtype").value);
   params.append("occupation", document.getElementById("qrole").value);
 
-  const r = await fetch(`${BACKEND}/search`, { method: "POST", body: params });
+  const r = await fetch(`${BACKEND}/search`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: params
+  });
+
   const data = await r.json();
 
   const div = document.getElementById("results");
@@ -64,8 +70,9 @@ async function search() {
         ${x.filename}<br>
         <a href="${BACKEND}/document/${x.chroma_id}" target="_blank">Open Document</a>
       </div>`;
-  })
+  });
 }
+
 </script>
 </body>
 </html>

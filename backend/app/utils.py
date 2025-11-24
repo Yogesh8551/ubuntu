@@ -15,3 +15,4 @@ def extract_text(filename: str, data: bytes):
         return "\n".join([p.text for p in doc.paragraphs])
 
     return data.decode("utf-8", errors="ignore")
+

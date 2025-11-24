@@ -43,15 +43,17 @@ def db():
 # --------------------------------------
 app = FastAPI()
 
-# --------------------------------------
-#  CORS FIX
-# --------------------------------------
+
+origins = [
+    "http://localhost:8080",  # frontend origin
+    "http://127.0.0.1:8080"
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8080", "*"],
+    allow_origins=origins,  # allow frontend
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"],    # allow GET, POST, etc.
+    allow_headers=["*"],    # allow all headers
 )
 
 logger.info("✅ CORS configured successfully")
@@ -87,7 +89,6 @@ def read_root():
     logger.info("➡️ Root endpoint accessed")
     return {"status": "Backend running successfully"}
 
-
 @app.post("/ingest")
 async def ingest_resume(
     file: UploadFile = File(...),
@@ -103,6 +104,10 @@ async def ingest_resume(
     data = await file.read()
     logger.info(f"📄 File size received: {len(data)} bytes")
 
+    # Generate Chroma ID immediately
+    chroma_id = str(uuid.uuid4())
+    logger.info(f"🆔 Generated Chroma ID: {chroma_id}")
+
     # Extract text
     try:
         text = utils.extract_text(file.filename, data)
@@ -111,23 +116,24 @@ async def ingest_resume(
         logger.error(f"❌ Error extracting text: {e}")
         raise
 
+    # Remove NUL bytes before saving
+    cleaned_text = text.replace("\x00", "")
+    snippet = cleaned_text[:300]
+
     # Embedding
     try:
         logger.info("🔢 Generating embedding...")
-        embedding = model.encode(text).tolist()
+        embedding = model.encode(cleaned_text).tolist()
         logger.info(f"🔢 Embedding generated | vector size = {len(embedding)}")
     except Exception as e:
         logger.error(f"❌ Embedding generation failed: {e}")
         raise
 
     # Chroma DB insert
-    chroma_id = str(uuid.uuid4())
-    logger.info(f"🆔 Generated Chroma ID: {chroma_id}")
-
     try:
         col.add(
             ids=[chroma_id],
-            documents=[text],
+            documents=[cleaned_text],
             embeddings=[embedding],
             metadatas=[{
                 "name": name,
@@ -151,7 +157,7 @@ async def ingest_resume(
             occupation=occupation,
             filename=file.filename,
             chroma_id=chroma_id,
-            snippet=text[:300]
+            snippet=snippet
         )
         logger.info(f"✅ Metadata stored in PostgreSQL | resume_id = {obj.id}")
     except Exception as e:
@@ -159,6 +165,7 @@ async def ingest_resume(
         raise
 
     return obj
+
 
 @app.post("/search", response_model=list[schemas.ResumeMeta])
 def search(
@@ -168,44 +175,18 @@ def search(
     db: Session = Depends(db)
 ):
     logger.info(f"🔍 Search called | name={name}, resumetype={resumetype}, occupation={occupation}")
+    return crud.query_resumes(db, name, resumetype, occupation)
 
-    # -------------------------------
-    # RULE 1: If NAME is provided → strict search
-    # -------------------------------
-    if name:
-        logger.info("🔎 Name filter provided → Performing strict match search")
-        result = crud.query_resumes(db, name=name)
+@app.get("/document/{chroma_id}")
+def document(chroma_id: str):
+    res = col.get(ids=[chroma_id], include=["documents", "metadatas"])
 
-        # If no record found for this exact name → return nothing
-        if not result:
-            logger.info("⚠️ No record found for this name → returning empty list")
-            return []
+    if not res or not res["documents"] or not res["documents"][0]:
+        raise HTTPException(status_code=404, detail="Document not found")
 
-        # Only return results for this name (never other people's resumes)
-        logger.info(f"✅ Found {len(result)} result(s) for name={name}")
-        return result
+    return {
+        "chroma_id": chroma_id,
+        "metadata": res["metadatas"][0],
+        "document": res["documents"][0]
+    }
 
-    # --------------------------------
-    # RULE 2: If name NOT provided → allow flexible filters
-    # --------------------------------
-    logger.info("🔍 No name provided → Using flexible filtering")
-    return crud.query_resumes(db, name=None, resumetype=resumetype, occupation=occupation)
-
-
-
-# @app.post("/search", response_model=list[schemas.ResumeMeta])
-# def search(
-#     name: str = None,
-#     resumetype: str = None,
-#     occupation: str = None,
-#     db: Session = Depends(db)
-# ):
-#     logger.info(f"🔍 Search called | name={name}, resumetype={resumetype}, occupation={occupation}")
-#     return crud.query_resumes(db, name, resumetype, occupation)
-
-
-# @app.get("/document/{chroma_id}")
-# def document(chroma_id: str):
-#     logger.info(f"📄 Fetching document from Chroma | id={chroma_id}")
-#     res = col.get(ids=[chroma_id], include=["documents", "metadatas"])
-#     return res
