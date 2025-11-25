@@ -11,12 +11,10 @@
 
 <body>
 <h2>Upload Resume</h2>
-
 <input id="name" placeholder="Name">
 <input id="rtype" placeholder="Resume Type">
 <input id="role" placeholder="Occupation">
 <input type="file" id="file">
-
 <button onclick="upload()">Upload</button>
 <pre id="uploadResult"></pre>
 
@@ -32,36 +30,37 @@
 
 <script>
 const BACKEND = "http://localhost:8001";
-
-async function upload() {
-  const fd = new FormData();
-  fd.append("name", document.getElementById("name").value)
-  fd.append("resumetype", document.getElementById("rtype").value)
-  fd.append("occupation", document.getElementById("role").value)
-  fd.append("file", document.getElementById("file").files[0])
-
-  const r = await fetch(`${BACKEND}/ingest`, { method: "POST", body: fd });
-  document.getElementById("uploadResult").innerText =
-    JSON.stringify(await r.json(), null, 2);
-}
 async function search() {
-  const params = new URLSearchParams();
-  params.append("name", document.getElementById("qname").value);
-  params.append("resumetype", document.getElementById("qrtype").value);
-  params.append("occupation", document.getElementById("qrole").value);
+  const name = document.getElementById("qname").value.trim();
+  const resumetype = document.getElementById("qrtype").value.trim();
+  let occupation = document.getElementById("qrole").value.trim();
+
+  if (occupation) {
+    occupation = occupation.split(",").map(o => o.trim()).join(",");
+  }
+
+  const body = {
+    name: name || undefined,
+    resumetype: resumetype || undefined,
+    occupation: occupation || undefined
+  };
 
   const r = await fetch(`${BACKEND}/search`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/x-www-form-urlencoded"
+      "Content-Type": "application/json"
     },
-    body: params
+    body: JSON.stringify(body)
   });
 
   const data = await r.json();
-
   const div = document.getElementById("results");
   div.innerHTML = "";
+
+  if (!data || data.length === 0) {
+    div.innerHTML = "<p>No resumes found for this query.</p>";
+    return;
+  }
 
   data.forEach(x => {
     div.innerHTML += `

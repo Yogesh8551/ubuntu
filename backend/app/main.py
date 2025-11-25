@@ -166,16 +166,28 @@ async def ingest_resume(
 
     return obj
 
+# @app.post("/search", response_model=list[schemas.ResumeMeta])
+# def search(
+#     name: str = None,
+#     resumetype: str = None,
+#     occupation: str = None,  # comma-separated occupations
+#     db: Session = Depends(db)
+# ):
+#     logger.info(f"🔍 Search called | name={name}, resumetype={resumetype}, occupation={occupation}")
+#     results = crud.query_resumes(db, name, resumetype, occupations=occupation)
+#     logger.info(f"🔍 Found {len(results)} resumes for occupation(s)={occupation}")
+#     return results
+from fastapi import Form
 
 @app.post("/search", response_model=list[schemas.ResumeMeta])
 def search(
-    name: str = None,
-    resumetype: str = None,
-    occupation: str = None,
+    name: str = Form(None),
+    resumetype: str = Form(None),
+    occupation: str = Form(None),
     db: Session = Depends(db)
 ):
-    logger.info(f"🔍 Search called | name={name}, resumetype={resumetype}, occupation={occupation}")
-    return crud.query_resumes(db, name, resumetype, occupation)
+    results = crud.query_resumes(db, name, resumetype, occupation)
+    return results
 
 @app.get("/document/{chroma_id}")
 def document(chroma_id: str):
