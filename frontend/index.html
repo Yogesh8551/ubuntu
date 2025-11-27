@@ -194,6 +194,12 @@ async function search(){
   if(resumetype) body.append("resumetype", resumetype);
   if(occupation) body.append("occupation", occupation);
 
+  //  ⏳ Start stopwatch
+  let start = performance.now();
+  let timerBox = document.getElementById("queryTime");
+  timerBox.innerHTML = "⏳ Retrieving data...";
+
+
   const r = await fetch(`${BACKEND}/search`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -201,6 +207,15 @@ async function search(){
   });
 
   const data = await r.json();
+
+   // ⏱ Stop stopwatch after data is retrieved
+    let totalTime = performance.now() - start;
+    let color = totalTime > 400 ? "red" : totalTime > 200 ? "orange" : "green";
+    timerBox.innerHTML = `⚡ Data retrieved in <b style="color:${color}">${totalTime.toFixed(1)} ms</b>`;
+
+    // Render results after timing
+
+
   renderResults(data);
 }
 function clearSearch(){
