@@ -16,6 +16,13 @@ import chromadb
 from chromadb import PersistentClient
 from sentence_transformers import SentenceTransformer
 
+
+logging.getLogger("uvicorn").setLevel(logging.DEBUG)
+logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO)   # shows DB activity
+logging.getLogger("CRUD_LOGS").setLevel(logging.DEBUG)          # our CRUD logs
+
+
+
 # --------------------------------------
 # LOGGING SETUP
 # --------------------------------------
