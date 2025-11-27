@@ -1,3 +1,5 @@
+
+
 <!doctype html>
 <html>
 <head>
@@ -108,10 +110,6 @@
         </div>
 
         <div id="results" class="results-list" style="margin-top:12px"></div>
-
-        <!-- ⏱ Query Execution Time -->
-        <div id="queryTime" style="margin-top:6px;font-size:13px;color:#444"></div>
-
       </div>
     </div>
 
@@ -171,6 +169,7 @@ async function upload(){
     }
     const data = await res.json();
     document.getElementById("uploadResult").innerText = JSON.stringify(data, null, 2);
+    // Auto-add to results list for convenience
     prependResultToList(data);
   }catch(err){
     document.getElementById("uploadResult").innerText = "Upload error: " + err;
@@ -184,7 +183,7 @@ function clearUpload(){
   document.getElementById("uploadResult").innerText = "";
 }
 
-// ---------------- Search with Stopwatch ----------------
+// ---------------- Search ----------------
 async function search(){
   const name = document.getElementById("qname").value.trim();
   const resumetype = document.getElementById("qrtype").value.trim();
@@ -195,43 +194,213 @@ async function search(){
   if(resumetype) body.append("resumetype", resumetype);
   if(occupation) body.append("occupation", occupation);
 
-  // ⏳ Stopwatch start
-  let start = performance.now();
-  let timerBox = document.getElementById("queryTime");
-  timerBox.innerHTML = "⏳ Searching...";
-  
-  let live = setInterval(()=>{
-      let ms = performance.now() - start;
-      timerBox.innerHTML = `⏳ Query Running: <b>${ms.toFixed(1)} ms</b>`;
-  }, 60);
-
-  const res = await fetch(`${BACKEND}/search`, {
+  const r = await fetch(`${BACKEND}/search`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: body.toString()
   });
 
-  const data = await res.json();
-  clearInterval(live);
-
-  // ⏱ Final execution time
-  let total = performance.now() - start;
-  let color = total > 400 ? "red" : total > 200 ? "orange" : "green";
-
-  timerBox.innerHTML = `⚡ Completed in <b style="color:${color}">${total.toFixed(1)} ms</b>`;
-
+  const data = await r.json();
   renderResults(data);
 }
-
 function clearSearch(){
   document.getElementById("qname").value = "";
   document.getElementById("qrtype").value = "";
   document.getElementById("qrole").value = "";
   document.getElementById("results").innerHTML = "";
-  document.getElementById("queryTime").innerHTML = "";
 }
 
 // ---------------- Results rendering ----------------
 function renderResults(data){
   const div = document.getElementById("results");
-  div.i
+  div.innerHTML = "";
+  if(!data || data.length===0){
+    div.innerHTML = "<div class='small-muted'>No resumes found.</div>";
+    return;
+  }
+
+  data.forEach(x => {
+    const item = document.createElement("div");
+    item.className = "result-item";
+
+    const title = document.createElement("b");
+    title.innerText = `${x.name || "(no name)"} — ${x.occupation || ""}`;
+    item.appendChild(title);
+
+    const fn = document.createElement("div");
+    fn.innerText = x.filename || "";
+    fn.style.marginBottom = "8px";
+    item.appendChild(fn);
+
+    const actions = document.createElement("div");
+    actions.className = "actions";
+
+    const openBtn = document.createElement("button");
+    openBtn.className = "link-btn";
+    openBtn.innerText = "Open Document";
+    openBtn.onclick = ()=> viewDocument(x.chroma_id);
+    actions.appendChild(openBtn);
+
+    // quick inspect JSON
+    const inspectBtn = document.createElement("button");
+    inspectBtn.className = "link-btn";
+    inspectBtn.style.marginLeft = "12px";
+    inspectBtn.innerText = "View Raw JSON";
+    inspectBtn.onclick = async ()=> {
+      const r = await fetch(`${BACKEND}/document/${x.chroma_id}`);
+      const d = await r.json();
+      alert(JSON.stringify(d, null, 2));
+    }
+    actions.appendChild(inspectBtn);
+
+    item.appendChild(actions);
+    div.appendChild(item);
+  });
+}
+
+function prependResultToList(obj){
+  // useful after ingest; show item in results
+  const div = document.getElementById("results");
+  const data = [obj];
+  const existing = div.firstChild;
+  renderResults(data.concat([]));
+  // not perfect ordering — acceptable for quick flow
+}
+
+// ---------------- Viewer ----------------
+let currentJSON = null;
+let showFull = false;
+
+async function viewDocument(chroma_id){
+  const viewerEmpty = document.getElementById("viewerEmpty");
+  const viewerContent = document.getElementById("viewerContent");
+  viewerEmpty.classList.add("hidden");
+  viewerContent.classList.remove("hidden");
+
+  // enable controls
+  document.getElementById("toggleFullBtn").disabled = false;
+  document.getElementById("downloadBtn").disabled = false;
+  document.getElementById("toggleFullBtn").innerText = "Show Full JSON";
+
+  document.getElementById("basicDetails").innerHTML = "<small class='small-muted'>Loading...</small>";
+  document.getElementById("summary").innerHTML = "";
+  document.getElementById("skills").innerHTML = "";
+  document.getElementById("experience").innerHTML = "";
+  document.getElementById("certifications").innerHTML = "";
+  document.getElementById("fullDocPre").innerText = "";
+
+  try{
+    const res = await fetch(`${BACKEND}/document/${chroma_id}`);
+    if(!res.ok){
+      const t = await res.text();
+      document.getElementById("basicDetails").innerHTML = `<span class="small-muted">Error: ${t}</span>`;
+      return;
+    }
+    const data = await res.json();
+    currentJSON = data; // store for download/toggle
+
+    // Basic details
+    const b = data["1. Basic Details"] || data["Basic Details"] || {};
+    let basicHtml = "<h3>Basic Details</h3>";
+    for(const k of Object.keys(b)){
+      basicHtml += `<div class="kv"><div class="k">${k}</div><div class="v">${escapeHtml(b[k]||"")}</div></div>`;
+    }
+    document.getElementById("basicDetails").innerHTML = basicHtml;
+
+    // Summary
+    const summaryText = data["2. Summary"] || data["Summary"] || "";
+    const summaryHtml = `<h3>Summary</h3><pre>${escapeHtml(summaryText || "(no summary)")}</pre>`;
+    document.getElementById("summary").innerHTML = summaryHtml;
+
+    // Skills
+    const skills = data["3. Technical Skills"] || data["Skills"] || [];
+    let skillsHtml = "<h3>Technical Skills</h3>";
+    if(Array.isArray(skills) && skills.length>0){
+      skillsHtml += "<ul class='skills'>";
+      skills.forEach(s => skillsHtml += `<li>${escapeHtml(s)}</li>`);
+      skillsHtml += "</ul>";
+    } else {
+      // attempt to extract from Summary if not present
+      skillsHtml += `<div class="small-muted">(no separate skills array)</div>`;
+    }
+    document.getElementById("skills").innerHTML = skillsHtml;
+
+    // Experience
+    const exp = data["4. Professional Experience"] || data["Experience"] || [];
+    let expHtml = "<h3>Professional Experience</h3>";
+    if(Array.isArray(exp) && exp.length>0){
+      expHtml += "<ul class='skills'>";
+      exp.forEach(e => expHtml += `<li>${escapeHtml(e)}</li>`);
+      expHtml += "</ul>";
+    } else {
+      expHtml += `<div class="small-muted">(no structured experience entries)</div>`;
+    }
+    document.getElementById("experience").innerHTML = expHtml;
+
+    // Certifications
+    const certs = data["5. Certifications"] || data["Certifications"] || [];
+    let certHtml = "<h3>Certifications</h3>";
+    if(Array.isArray(certs) && certs.length>0){
+      certHtml += "<ul class='skills'>";
+      certs.forEach(c => certHtml += `<li>${escapeHtml(c)}</li>`);
+      certHtml += "</ul>";
+    } else {
+      certHtml += `<div class="small-muted">(no certifications listed)</div>`;
+    }
+    document.getElementById("certifications").innerHTML = certHtml;
+
+    // Full document
+    const fullDoc = data["6. Full Document"] || data["Full Document"] || null;
+    if(fullDoc && fullDoc !== "Available fully if needed using ?full=true"){
+      document.getElementById("fullDocPre").innerText = fullDoc;
+    } else {
+      // also try to show raw "document" field if present in metadata sections (chroma output)
+      if(data["document"]) document.getElementById("fullDocPre").innerText = data["document"];
+    }
+
+    // reset toggle state
+    showFull = false;
+    toggleFull(false);
+  }catch(err){
+    document.getElementById("basicDetails").innerHTML = `<span class="small-muted">Error: ${err}</span>`;
+  }
+}
+
+function toggleFull(forceState){
+  const section = document.getElementById("fullDoc");
+  const btn = document.getElementById("toggleFullBtn");
+  if(typeof forceState === "boolean") showFull = forceState;
+  showFull = !showFull && (forceState===undefined ? true : showFull);
+  // the above keeps behavior: calling toggleFull() toggles; calling toggleFull(false) sets false
+
+  if(!showFull){
+    section.classList.add("hidden");
+    btn.innerText = "Show Full JSON";
+  } else {
+    section.classList.remove("hidden");
+    btn.innerText = "Hide Full JSON";
+  }
+}
+
+function downloadJSON(){
+  if(!currentJSON) return;
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(currentJSON, null, 2));
+  const dl = document.createElement("a");
+  dl.setAttribute("href", dataStr);
+  const filename = (currentJSON["1. Basic Details"]?.Name || "resume") + ".json";
+  dl.setAttribute("download", filename);
+  document.body.appendChild(dl);
+  dl.click();
+  dl.remove();
+}
+
+function escapeHtml(str){
+  if(str === null || str === undefined) return "";
+  return String(str)
+         .replace(/&/g, "&amp;")
+         .replace(/</g, "&lt;")
+         .replace(/>/g, "&gt;");
+}
+</script>
+</body>
+</html>
