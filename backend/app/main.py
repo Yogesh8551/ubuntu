@@ -6,7 +6,7 @@ import uuid
 import logging
 from fastapi import FastAPI, UploadFile, File, Form, Depends
 from sqlalchemy.orm import Session
-
+import time
 from .database import Base, engine, SessionLocal
 from . import utils, crud, schemas
 
@@ -183,10 +183,27 @@ def search(
     occupation: str = Form(None),
     db: Session = Depends(db)
 ):
-
+    
+       # ⏱ START STOPWATCH
+    total_start = time.time()
+    query_start = time.time()
     
 
     results = crud.query_resumes(db, name, resumetype, occupation)
+
+     # ⏱ STOP — QUERY TIME
+    query_time = (time.time() - query_start) * 1000
+    total_time = (time.time() - total_start) * 1000
+    # ------------------------------------
+
+    # 📝 LOGS in console
+    logger.info("🟦 Search Requested")
+    logger.info(f"➡ name={name}, type={resumetype}, occupation={occupation}")
+    logger.info(f"⚡ DB Query Time     : {query_time:.2f} ms")
+    logger.info(f"🚀 Total API Time    : {total_time:.2f} ms (network+process)")
+
+
+
     return results
 
 # @app.get("/document/{chroma_id}")

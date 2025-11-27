@@ -107,7 +107,10 @@
         <div style="display:flex; gap:10px; margin-top:10px;">
           <button class="primary" onclick="search()">Search</button>
           <button class="ghost" onclick="clearSearch()">Clear</button>
+          
         </div>
+
+        <div id="timeTaken" style="margin-top:8px; font-size:13px; color:#444;"></div>
 
         <div id="results" class="results-list" style="margin-top:12px"></div>
       </div>
@@ -184,16 +187,43 @@ function clearUpload(){
 }
 
 // ---------------- Search ----------------
+// async function search(){
+//   const name = document.getElementById("qname").value.trim();
+//   const resumetype = document.getElementById("qrtype").value.trim();
+//   const occupation = document.getElementById("qrole").value.trim();
+
+//   const body = new URLSearchParams();
+//   if(name) body.append("name", name);
+//   if(resumetype) body.append("resumetype", resumetype);
+//   if(occupation) body.append("occupation", occupation);
+
+
+//   const r = await fetch(`${BACKEND}/search`, {
+//     method: "POST",
+//     headers: { "Content-Type": "application/x-www-form-urlencoded" },
+//     body: body.toString()
+//   });
+
+//   const data = await r.json();
+
+
+//   renderResults(data);
+// }
+
+// ---------------- Search with Stopwatch ----------------
 async function search(){
   const name = document.getElementById("qname").value.trim();
   const resumetype = document.getElementById("qrtype").value.trim();
   const occupation = document.getElementById("qrole").value.trim();
 
+  // START STOPWATCH ⏱
+  const startTime = performance.now();
+  document.getElementById("timeTaken").innerText = "Searching...";
+
   const body = new URLSearchParams();
   if(name) body.append("name", name);
   if(resumetype) body.append("resumetype", resumetype);
   if(occupation) body.append("occupation", occupation);
-
 
   const r = await fetch(`${BACKEND}/search`, {
     method: "POST",
@@ -203,9 +233,17 @@ async function search(){
 
   const data = await r.json();
 
+  // END STOPWATCH ⏱
+  const endTime = performance.now();
+  const elapsed = (endTime - startTime).toFixed(2); // milliseconds
+
+  document.getElementById("timeTaken").innerText = `⏱ Search Time: ${elapsed} ms`;
 
   renderResults(data);
 }
+
+
+
 function clearSearch(){
   document.getElementById("qname").value = "";
   document.getElementById("qrtype").value = "";
