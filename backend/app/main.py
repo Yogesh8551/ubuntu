@@ -184,18 +184,7 @@ def search(
     db: Session = Depends(db)
 ):
 
-        # ⏳ Start timer
-    start_time = time.time()
-
-    results = crud.query_resumes(db, name, resumetype, occupation)
-
-    # ⏱ Calculate time taken in ms
-    time_taken = (time.time() - start_time) * 1000  
-
-    # 📝 Log output cleanly
-    logger.info(f"🔍 Search Query -> name={name}, type={resumetype}, occupation={occupation}")
-    logger.info(f"⚡ Query returned {len(results)} result(s) in {time_taken:.2f} ms")
-
+    
 
     results = crud.query_resumes(db, name, resumetype, occupation)
     return results
